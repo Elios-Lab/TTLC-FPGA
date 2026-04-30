@@ -74,19 +74,19 @@ Input [50 × 30]
 ```
 .
 ├── README.md
-├── 1d-cnn/
+├── 1D-CNN/
 │   ├── fp32/                        # 1D-CNN – FP32 implementation
 │   │   ├── 1dcnn_fp32.h             # Architecture defines and top-function declaration
 │   │   ├── 1dcnn_fp32.cpp           # HLS top-level implementation
 │   │   ├── 1dcnn_fp32_tb.cpp        # Testbench
-│   │   └── weights.h                # Pre-trained FP32 weights
+│   │   └── 1dcnn_weights_fp32.h     # Pre-trained FP32 weights
 │   └── int8/                        # 1D-CNN – INT8 implementation
-│       ├── 1dcnn_int8_fixed.h       # Architecture defines and quantization parameters
-│       ├── 1dcnn_int8_fixed.cpp     # HLS top-level implementation
-│       ├── 1dcnn_int8_fixed_tb.cpp  # Testbench
-│       ├── weights_int8.h           # Pre-trained INT8 weights
-│       └── quant_params_fixed.h     # Quantization scales and zero-points
-├── trans/
+│       ├── 1dcnn_int8.h             # Architecture defines and quantization parameters
+│       ├── 1dcnn_int8.cpp           # HLS top-level implementation
+│       ├── 1dcnn_int8_tb.cpp        # Testbench
+│       ├── 1dcnn_weights_int8.h     # Pre-trained INT8 weights
+│       └── 1dcnn_quant_params.h     # Quantization scales and zero-points
+├── Transformer/
 │   ├── trans_fp32/                  # Transformer – FP32 implementation
 │   │   ├── trans_fp32.h             # Architecture defines and top-function declaration
 │   │   ├── trans_fp32.cpp           # HLS top-level implementation
@@ -103,7 +103,7 @@ Input [50 × 30]
 │       ├── trans_bin.cpp            # HLS top-level implementation (XNOR-popcount)
 │       ├── trans_bin_tb.cpp         # Testbench
 │       └── trans_weights_bin.h      # Pre-trained binarised weights with α-scales
-└── xgb/
+└── XGBoost/
     ├── fp32/                        # XGBoost – FP32 implementation
     │   ├── xgboost_fp32.h           # Defines and top-function declaration
     │   ├── xgboost_fp32.cpp         # HLS top-level implementation
@@ -155,10 +155,10 @@ For each model and precision, add the corresponding files as follows:
 
 | File | Role |
 |---|---|
-| `1d-cnn/fp32/1dcnn_fp32.cpp` | Design source |
-| `1d-cnn/fp32/1dcnn_fp32.h` | Header |
-| `1d-cnn/fp32/weights.h` | Weight header |
-| `1d-cnn/fp32/1dcnn_fp32_tb.cpp` | Testbench |
+| `1D-CNN/fp32/1dcnn_fp32.cpp` | Design source |
+| `1D-CNN/fp32/1dcnn_fp32.h` | Header |
+| `1D-CNN/fp32/weights.h` | Weight header |
+| `1D-CNN/fp32/1dcnn_fp32_tb.cpp` | Testbench |
 
 ### 3. Set the Top Function
 
@@ -167,7 +167,7 @@ In the Vitis HLS project settings, specify the **top function** for synthesis:
 | Model / Precision | Top Function |
 |---|---|
 | 1D-CNN FP32 | `cnn1d_fp32` |
-| 1D-CNN INT8 | `cnn1d_int8_fixed` |
+| 1D-CNN INT8 | `cnn1d_int8` |
 | Transformer FP32 | `trans_fp32` |
 | Transformer INT8 | `trans_int8` |
 | Transformer Binary | `trans_bin` |
