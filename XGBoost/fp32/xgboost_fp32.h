@@ -10,4 +10,4 @@
 #define SEQ_LEN  50
 #define EMBED_DIM 30
 
-extern "C" void xgboost_kernel(const float* x, float* y);
+extern "C" void xgboost_fp32(const float* x, float* y);
