@@ -45,7 +45,7 @@ static void dense_int8_mat(
     const qint8_t* x_q,
     const qint8_t* W_q,
     const float*   b,
-    float          w_scale,
+    const float*    w_scale,
     qint8_t*       y_q,
     int len,
     int in_dim,
@@ -65,14 +65,13 @@ DENSE_COLS:
 
 DENSE_DOT:
             for (int d = 0; d < in_dim; ++d) {
-#pragma HLS PIPELINE II=1
                 qint8_t xv = x_q[i * in_dim + d];
                 qint8_t wv = W_q[d * out_dim + o];
                 acc += (qint16_t)xv * (qint16_t)wv;
             }
 
             // Dequant
-            float y_real = ACT_SCALE * ((float)acc * w_scale);
+            float y_real = ACT_SCALE * ((float)acc * w_scale[o]);
             if (b) y_real += b[o];
 
             y_q[i * out_dim + o] = quantize_act(y_real);
@@ -85,7 +84,7 @@ static void dense_int8_vec(
     const qint8_t* x_q,
     const qint8_t* W_q,
     const float*   b,
-    float          w_scale,
+    const float*   w_scale,
     qint8_t*       y_q,
     int in_dim,
     int out_dim
@@ -103,7 +102,7 @@ DENSE_VEC_IN:
             qint8_t xv = x_q[d];
             qint8_t wv = W_q[d * out_dim + o];
 
-            float prod = ACT_SCALE * ((float)((qint16_t)xv * (qint16_t)wv) * w_scale);
+            float prod = ACT_SCALE * ((float)((qint16_t)xv * (qint16_t)wv) * w_scale[o]);
 
             switch (d & 3) {
                 case 0: acc0 += prod; break;
@@ -412,7 +411,7 @@ POS_I:
         for (int j = 0; j < EMBED_DIM; ++j) {
 #pragma HLS PIPELINE II=1
             float x_r   = dequantize_act(x_q[i][j]);
-            float pe_r  = (float)w.table[i][j] * w.scale;
+            float pe_r  = (float)w.table[i][j] * w.scale[j];
             float sum   = x_r + pe_r;
             x_q[i][j] = quantize_act(sum);
         }
@@ -484,12 +483,16 @@ FINAL_DEQ:
 // --------------------------------------------------------------------
 
 void init_model_weights_int8(TransformerModelInt8 &model) {
+#pragma HLS INLINE off
+
     // --------------------------------------------------
     // Positional encoding (INT8)
     // --------------------------------------------------
     {
-        model.pos_emb.scale =
-            w_0017_model_positional_encoding_embedding_embedding_lookup_scale;
+        for (int d = 0; d < EMBED_DIM; ++d) {
+            model.pos_emb.scale[d] =
+                w_0017_model_positional_encoding_embedding_embedding_lookup_scale;
+        }
 
         const int8_t *src =
             w_0017_model_positional_encoding_embedding_embedding_lookup_q;
@@ -542,14 +545,18 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
     // --------------------------------------------------
     {
         // Q, K, V, O scales
-        model.encoders[0].W_q_scale =
-            w_0007_model_multi_head_attention_query_einsum_Einsum_scale;
-        model.encoders[0].W_k_scale =
-            w_0006_model_multi_head_attention_key_einsum_Einsum1_scale;
-        model.encoders[0].W_v_scale =
-            w_0011_model_multi_head_attention_value_einsum_Einsum_scale;
-        model.encoders[0].W_o_scale =
-            w_0012_model_multi_head_attention_attention_output_einsum_Einsum2_scale;
+        for (int i = 0; i < HEAD_SIZE; ++i) {
+            model.encoders[0].W_q_scale[i] =
+                w_0007_model_multi_head_attention_query_einsum_Einsum_scale;
+            model.encoders[0].W_k_scale[i] =
+                w_0006_model_multi_head_attention_key_einsum_Einsum1_scale;
+            model.encoders[0].W_v_scale[i] =
+                w_0011_model_multi_head_attention_value_einsum_Einsum_scale;
+        }
+        for (int i = 0; i < EMBED_DIM; ++i) {
+            model.encoders[0].W_o_scale[i] =
+                w_0012_model_multi_head_attention_attention_output_einsum_Einsum2_scale;
+        }
 
         // Q: [EMBED_DIM][HEAD_SIZE], src shape (30,128)
         {
@@ -611,14 +618,18 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
     // MHA block 1 (encoder 1) - INT8
     // --------------------------------------------------
     {
-        model.encoders[1].W_q_scale =
-            w_0014_model_multi_head_attention_1_query_einsum_Einsum_scale;
-        model.encoders[1].W_k_scale =
-            w_0013_model_multi_head_attention_1_key_einsum_Einsum_scale;
-        model.encoders[1].W_v_scale =
-            w_0015_model_multi_head_attention_1_value_einsum_Einsum_scale;
-        model.encoders[1].W_o_scale =
-            w_0016_model_multi_head_attention_1_attention_output_einsum_Einsum_scale;
+        for (int i = 0; i < HEAD_SIZE; ++i) {
+            model.encoders[1].W_q_scale[i] =
+                w_0014_model_multi_head_attention_1_query_einsum_Einsum_scale;
+            model.encoders[1].W_k_scale[i] =
+                w_0013_model_multi_head_attention_1_key_einsum_Einsum_scale;
+            model.encoders[1].W_v_scale[i] =
+                w_0015_model_multi_head_attention_1_value_einsum_Einsum_scale;
+        }
+        for (int i = 0; i < EMBED_DIM; ++i) {
+            model.encoders[1].W_o_scale[i] =
+                w_0016_model_multi_head_attention_1_attention_output_einsum_Einsum_scale;
+        }
 
         // Q1
         {
@@ -681,8 +692,10 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
     // --------------------------------------------------
     {
         // W1: src shape (FF_DIM, EMBED_DIM) = (128, 30)
-        model.encoders[0].W_ff1_scale =
-            w_0048_model_dense_Tensordot_MatMul1_scale;
+        for (int i = 0; i < FF_DIM; ++i) {
+            model.encoders[0].W_ff1_scale[i] =
+                w_0048_model_dense_Tensordot_MatMul1_scale;
+        }
         for (int in = 0; in < EMBED_DIM; ++in) {
             for (int out = 0; out < FF_DIM; ++out) {
                 int idx = out * EMBED_DIM + in;
@@ -697,8 +710,10 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
         }
 
         // W2: src shape (EMBED_DIM, FF_DIM) = (30, 128)
-        model.encoders[0].W_ff2_scale =
-            w_0049_model_dense_1_Tensordot_MatMul_scale;
+        for (int i = 0; i < EMBED_DIM; ++i) {
+            model.encoders[0].W_ff2_scale[i] =
+                w_0049_model_dense_1_Tensordot_MatMul_scale;
+        }
         for (int in = 0; in < FF_DIM; ++in) {
             for (int out = 0; out < EMBED_DIM; ++out) {
                 int idx = out * FF_DIM + in;
@@ -718,8 +733,10 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
     // --------------------------------------------------
     {
         // W1: src shape (FF_DIM, EMBED_DIM) = (128, 30)
-        model.encoders[1].W_ff1_scale =
-            w_0050_model_dense_2_Tensordot_MatMul_scale;
+        for (int i = 0; i < FF_DIM; ++i) {
+            model.encoders[1].W_ff1_scale[i] =
+                w_0050_model_dense_2_Tensordot_MatMul_scale;
+        }
         for (int in = 0; in < EMBED_DIM; ++in) {
             for (int out = 0; out < FF_DIM; ++out) {
                 int idx = out * EMBED_DIM + in;
@@ -734,8 +751,10 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
         }
 
         // W2: src shape (EMBED_DIM, FF_DIM) = (30, 128)
-        model.encoders[1].W_ff2_scale =
-            w_0051_model_dense_3_Tensordot_MatMul_scale;
+        for (int i = 0; i < EMBED_DIM; ++i) {
+            model.encoders[1].W_ff2_scale[i] =
+                w_0051_model_dense_3_Tensordot_MatMul_scale;
+        }
         for (int in = 0; in < FF_DIM; ++in) {
             for (int out = 0; out < EMBED_DIM; ++out) {
                 int idx = out * FF_DIM + in;
@@ -755,7 +774,10 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
     // --------------------------------------------------
     {
         // W1: src shape (MLP_UNITS, EMBED_DIM) = (160, 30)
-        model.mlp.W1_scale = w_0052_model_dense_4_MatMul_scale;
+        for (int i = 0; i < MLP_UNITS; ++i) {
+            model.mlp.W1_scale[i] =
+                w_0052_model_dense_4_MatMul_scale;
+        }
         for (int in = 0; in < EMBED_DIM; ++in) {
             for (int out = 0; out < MLP_UNITS; ++out) {
                 int idx = out * EMBED_DIM + in;
@@ -770,7 +792,10 @@ void init_model_weights_int8(TransformerModelInt8 &model) {
         }
 
         // W2: src shape (MLP_UNITS, FINAL_NEURONS) = (160, 1)
-        model.mlp.W2_scale = w_0053_model_dense_5_kernel_scale;
+        for (int i = 0; i < FINAL_NEURONS; ++i) {
+            model.mlp.W2_scale[i] =
+                w_0053_model_dense_5_kernel_scale;
+        }
         for (int i = 0; i < MLP_UNITS; ++i) {
             model.mlp.W2[i][0] =
                 (qint8_t)w_0053_model_dense_5_kernel_q[i];
