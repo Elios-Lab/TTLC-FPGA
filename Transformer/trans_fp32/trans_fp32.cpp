@@ -549,7 +549,7 @@ void init_model_weights(TransformerModel& model) {
 }
 
 // Top-level HLS function
-extern "C" void transformer_hls(
+extern "C" void trans_fp32(
     const float input[SEQ_LEN][EMBED_DIM],
     float output[FINAL_NEURONS]
 ) {
