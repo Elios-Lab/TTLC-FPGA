@@ -12,4 +12,4 @@
 
 extern const float INV_SCALE[XGB_NUM_FEATURES];
 
-extern "C" void xgboost_kernel(const float* x, float* y);
+extern "C" void xgboost_int8(const float* x, float* y);
